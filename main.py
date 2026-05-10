@@ -4,49 +4,34 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# 1. Настройка API Ключа (берем из настроек Render)
-API_KEY = os.environ.get("GEMINI_API_KEY")
+# Настройка API ключа из переменных окружения Render
+API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# 2. Инициализация модели (используем стабильную версию)
-# Если 1.5-flash не сработает, библиотека сама выберет доступную
-try:
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except:
-    model = genai.GenerativeModel('gemini-pro')
+# Используем максимально стабильное имя модели
+model = genai.GenerativeModel('models/gemini-1.5-flash')
 
-# Переменная для хранения последнего ответа для ESP32
-last_answer = "Ожидаю вопроса от комиссии..."
+# Переменная для хранения ответа для ESP32
+last_answer = "Привет! Я готов к работе."
 
-# 3. HTML-интерфейс для телефона
 HTML_PAGE = """
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Assistant Control</title>
+    <title>Gemini Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px 20px; background: #0f0f0f; color: #e0e0e0; }
-        .container { max-width: 400px; margin: auto; background: #1e1e1e; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h1 { color: #fff; font-size: 24px; margin-bottom: 30px; }
-        button { 
-            padding: 20px 40px; font-size: 18px; border-radius: 50px; border: none; 
-            background: linear-gradient(45deg, #007bff, #00c6ff); color: white; 
-            cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; font-weight: bold;
-        }
-        button:active { transform: scale(0.95); }
-        #status { margin-top: 25px; color: #aaa; font-size: 14px; }
-        #result { margin-top: 25px; padding: 15px; border-top: 1px solid #333; color: #00ffcc; line-height: 1.5; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: white; }
+        button { padding: 20px 40px; font-size: 20px; border-radius: 50px; border: none; background: #007bff; color: white; cursor: pointer; margin-bottom: 20px; }
+        #status { color: #00ff00; margin-top: 10px; min-height: 20px; }
+        #result { margin-top: 20px; color: #ccc; border-top: 1px solid #333; padding-top: 20px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Голосовой помощник</h1>
-        <button id="micBtn">🎤 Задать вопрос</button>
-        <div id="status">Нажмите кнопку и говорите</div>
-        <div id="result"></div>
-    </div>
+    <h1>Голосовой помощник</h1>
+    <button id="micBtn">🎤 Задать вопрос</button>
+    <div id="status">Нажмите кнопку и говорите</div>
+    <div id="result">Ожидание ответа...</div>
 
     <script>
         const btn = document.getElementById('micBtn');
@@ -58,43 +43,31 @@ HTML_PAGE = """
             const rec = new SpeechRecognition();
             rec.lang = 'ru-RU';
 
-            btn.onclick = () => { 
-                rec.start(); 
-                status.innerText = 'Слушаю вас...'; 
-                btn.style.opacity = '0.5';
-            };
+            btn.onclick = () => { rec.start(); status.innerText = 'Слушаю...'; };
 
             rec.onresult = (e) => {
                 const text = e.results[0][0].transcript;
-                resultDiv.innerText = 'Вы: ' + text;
-                status.innerText = 'Думаю...';
+                status.innerText = 'Обработка: ' + text;
                 
                 fetch('/ask?q=' + encodeURIComponent(text))
                     .then(r => r.text())
                     .then(data => {
-                        status.innerText = 'Ответ отправлен на ESP32';
-                        resultDiv.innerText = 'AI: ' + data;
-                        btn.style.opacity = '1';
+                        status.innerText = 'Отправлено на ESP32!';
+                        resultDiv.innerText = 'ИИ ответил: ' + data;
                     })
                     .catch(err => {
-                        status.innerText = 'Ошибка связи с ИИ';
-                        btn.style.opacity = '1';
+                        status.innerText = 'Ошибка запроса';
+                        resultDiv.innerText = err;
                     });
             };
-            
-            rec.onerror = () => {
-                status.innerText = 'Ошибка микрофона. Попробуйте еще раз.';
-                btn.style.opacity = '1';
-            };
         } else {
-            status.innerText = 'Ваш браузер не поддерживает голос. Используйте Chrome или Safari.';
+            status.innerText = 'Браузер не поддерживает голос';
         }
     </script>
 </body>
 </html>
 """
 
-# 4. Логика обработки запросов
 @app.route('/')
 def index():
     return render_template_string(HTML_PAGE)
@@ -107,14 +80,14 @@ def ask():
         return "Пустой запрос"
     
     try:
-        # Добавляем инструкцию отвечать коротко для маленького OLED экрана
-        response = model.generate_content(f"Ответь на русском языке, очень кратко (максимум 10 слов): {query}")
-        last_answer = response.text.strip()
+        # Ограничиваем длину ответа для маленького экрана OLED
+        response = model.generate_content(query + ". Ответь очень коротко, максимум 10 слов.")
+        last_answer = response.text
         return last_answer
     except Exception as e:
+        last_answer = "Ошибка ИИ"
         return f"Ошибка ИИ: {str(e)}"
 
-# 5. Эндпоинт, который будет опрашивать ESP32
 @app.route('/get_answer')
 def get_answer():
     return last_answer
