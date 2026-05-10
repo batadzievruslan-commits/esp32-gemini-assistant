@@ -8,12 +8,8 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# Мы принудительно заставляем использовать стабильную версию v1
-model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash'
-)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Остальной код без изменений...
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
