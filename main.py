@@ -1,14 +1,32 @@
 import os
 from flask import Flask, request, render_template_string
-import google.generativeai as genai
+from google import genai
 
 app = Flask(__name__)
 
-# Настройка API ключа
-API_KEY = os.environ.get("GOOGLE_API_KEY")
-genai.configure(api_key=API_KEY)
+# Инициализация клиента по новой инструкции из логов
+client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
-model = genai.GenerativeModel('gemini-pro')
+last_answer = "Привет! Я готов к работе."
+
+@app.route('/ask')
+def ask():
+    global last_answer
+    query = request.args.get('q', '')
+    if not query: return "Пустой запрос"
+    
+    try:
+        # Новый способ вызова модели Gemini 1.5 Flash
+        response = client.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents=query + ". Ответь очень коротко, до 10 слов."
+        )
+        last_answer = response.text
+        return last_answer
+    except Exception as e:
+        return f"Ошибка ИИ: {str(e)}"
+
+# Остальные маршруты (/, /get_answer) оставь как были
 
 HTML_PAGE = """
 <!DOCTYPE html>
