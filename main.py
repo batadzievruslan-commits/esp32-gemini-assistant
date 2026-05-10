@@ -8,8 +8,13 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# Используем максимально стабильное имя модели
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+# Вместо старых строк используй этот вариант
+try:
+    # Попробуем самую стабильную версию
+    model = genai.GenerativeModel('gemini-1.5-flash') 
+except:
+    # Если не вышло, попробуем через полный путь
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 # Переменная для хранения ответа для ESP32
 last_answer = "Привет! Я готов к работе."
