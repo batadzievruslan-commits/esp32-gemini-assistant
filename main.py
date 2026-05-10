@@ -6,13 +6,12 @@ app = Flask(__name__)
 
 # Настройка API ключа
 API_KEY = os.environ.get("GOOGLE_API_KEY")
-if not API_KEY:
-    print("ВНИМАНИЕ: GOOGLE_API_KEY не найден в переменных окружения!")
 genai.configure(api_key=API_KEY)
 
-# Используем только полный путь к модели — это решит ошибку 404
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+# УДАЛИ ВЕСЬ БЛОК TRY-EXCEPT И ОСТАВЬ ТОЛЬКО ЭТУ СТРОКУ:
+model = genai.GenerativeModel('models/gemini-1.5-flash') 
 
+# Остальной код без изменений...
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
