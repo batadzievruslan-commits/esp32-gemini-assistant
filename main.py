@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Твой ключ API (потом вынесем в переменные окружения для безопасности)
 API_KEY = "AIzaSyB-8SRG_d2Az4JUNZ-g9krqE7gd30rSPBg"
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-pro')
 
 # Переменная для хранения последнего ответа
 last_answer = "Жду вопроса..."
