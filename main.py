@@ -8,7 +8,7 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-pro')
 
 HTML_PAGE = """
 <!DOCTYPE html>
