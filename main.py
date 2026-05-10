@@ -8,8 +8,10 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# УДАЛИ ВЕСЬ БЛОК TRY-EXCEPT И ОСТАВЬ ТОЛЬКО ЭТУ СТРОКУ:
-model = genai.GenerativeModel('models/gemini-1.5-flash') 
+# Мы принудительно заставляем использовать стабильную версию v1
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash'
+)
 
 # Остальной код без изменений...
 HTML_PAGE = """
