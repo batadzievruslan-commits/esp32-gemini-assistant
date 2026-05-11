@@ -4,39 +4,38 @@ from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Берем ключ из настроек Render (Environment Variables)
+# Берем ключ из Environment Variables в Render
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
-# Было: gemini-1.5-flash
-# Стало: gemini-pro (самая совместимая версия для старых и новых проектов)
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEY}"
+# URL для модели 1.5 Flash (самая быстрая и актуальная)
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
+# Простой HTML-интерфейс для проверки работы
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Assistant</title>
+    <title>Gemini Voice Assistant</title>
     <style>
-        body { background: #1a1a1a; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: #2d2d2d; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        input { padding: 12px; width: 80%; border-radius: 8px; border: none; margin-bottom: 20px; font-size: 16px; }
-        button { padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e1e1e; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; border: 1px solid #333; }
+        h2 { color: #fff; margin-bottom: 1.5rem; font-weight: 300; }
+        input { width: 100%; padding: 12px; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #444; background: #252525; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
         button:hover { background: #0056b3; }
-        .status { margin-top: 20px; color: #aaa; font-size: 0.9em; }
+        .footer { margin-top: 1.5rem; font-size: 0.8rem; color: #666; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="card">
         <h2>Голосовой помощник</h2>
-        <p>Дипломный проект (KSTU)</p>
         <form action="/ask">
-            <input type="text" name="q" placeholder="Введите ваш вопрос..." required>
-            <br>
-            <button type="submit">Спросить ИИ</button>
+            <input type="text" name="q" placeholder="Введите вопрос..." required>
+            <button type="submit">Спросить Gemini</button>
         </form>
-        <div class="status">Статус сервера: <span style="color: #51cf66;">LIVE</span></div>
+        <div class="footer">KSTU Diploma Project • Статус: LIVE</div>
     </div>
 </body>
 </html>
@@ -50,44 +49,34 @@ def index():
 def ask():
     user_query = request.args.get('q')
     if not user_query:
-        return "<h1>Ошибка:</h1><p>Вы ничего не ввели.</p><a href='/'>Назад</a>"
-    
-    # Формируем JSON-запрос для Google Gemini API
+        return "Ошибка: пустой запрос"
+
+    # Формируем структуру запроса для Google
     payload = {
         "contents": [{
             "parts": [{"text": user_query}]
         }]
     }
-    
+
     try:
-        # Прямой POST-запрос через библиотеку requests
-        res = requests.post(GEMINI_URL, json=payload, timeout=10)
-        data = res.json()
-        
-        if res.status_code == 200:
-            # Извлекаем текст ответа из структуры Google JSON
-            ai_text = data['candidates'][0]['content']['parts'][0]['text']
+        # Отправляем запрос на сервер Google
+        response = requests.post(GEMINI_URL, json=payload, timeout=10)
+        result = response.json()
+
+        if response.status_code == 200:
+            # Извлекаем текст ответа
+            ai_response = result['candidates'][0]['content']['parts'][0]['text']
             
-            # Выводим ответ на отдельной странице для теста
-            return f"""
-            <body style="background: #1a1a1a; color: white; font-family: sans-serif; padding: 40px; text-align: center;">
-                <div style="max-width: 600px; margin: auto; background: #2d2d2d; padding: 20px; border-radius: 10px; text-align: left;">
-                    <h2 style="color: #51cf66;">Ответ Gemini:</h2>
-                    <p style="line-height: 1.6; font-size: 18px;">{ai_text}</p>
-                    <hr style="border: 0.5px solid #444; margin: 20px 0;">
-                    <a href="/" style="color: #007bff; text-decoration: none; font-weight: bold;">← Задать другой вопрос</a>
-                </div>
-            </body>
-            """
+            # Возвращаем чистый текст (это важно для ESP32)
+            return ai_response
         else:
-            # Если API вернуло ошибку (например, 404 или 400)
-            return f"<h1>Ошибка API:</h1><pre style='color: red;'>{str(data)}</pre><a href='/'>Назад</a>"
-            
+            # Если Google вернул ошибку (например, 404 или 403)
+            return f"Ошибка API: {result.get('error', {}).get('message', 'Неизвестная ошибка')}"
+
     except Exception as e:
-        # Если проблема с интернетом или самим сервером
-        return f"<h1>Ошибка сервера:</h1><p>{str(e)}</p><a href='/'>Назад</a>"
+        return f"Ошибка сервера: {str(e)}"
 
 if __name__ == "__main__":
-    # Порт для Render
+    # Render использует переменную PORT
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
