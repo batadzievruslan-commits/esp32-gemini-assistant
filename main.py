@@ -1,95 +1,95 @@
 import os
-import requests
 from flask import Flask, request, render_template_string
+import google.generativeai as genai
 
 app = Flask(__name__)
 
 API_KEY = os.environ.get("GOOGLE_API_KEY")
+genai.configure(api_key=API_KEY)
 
-if not API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
-
-# Используем gemini-2.5-flash
+# Пробуем сначала lite-версию — она меньше нагружена
 model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
+
+last_answer = "Привет! Я готов к работе."
 
 HTML_PAGE = """
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Voice Assistant</title>
+    <title>Gemini Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #1e1e1e; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; border: 1px solid #333; }
-        h2 { color: #fff; margin-bottom: 1.5rem; font-weight: 300; }
-        input { width: 100%; padding: 12px; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #444; background: #252525; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #0056b3; }
-        .footer { margin-top: 1.5rem; font-size: 0.8rem; color: #666; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: white; }
+        button { padding: 20px 40px; font-size: 20px; border-radius: 50px; border: none; background: #007bff; color: white; cursor: pointer; margin-bottom: 20px; }
+        #status { color: #00ff00; margin-top: 10px; min-height: 20px; }
+        #result { margin-top: 20px; color: #ccc; border-top: 1px solid #333; padding-top: 20px; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Голосовой помощник</h2>
-        <form action="/ask">
-            <input type="text" name="q" placeholder="Введите вопрос..." required>
-            <button type="submit">Спросить Gemini</button>
-        </form>
-        <div class="footer">KSTU Diploma Project • Статус: LIVE</div>
-    </div>
+    <h1>Голосовой помощник</h1>
+    <button id="micBtn">🎤 Задать вопрос</button>
+    <div id="status">Нажмите кнопку и говорите</div>
+    <div id="result">Ожидание ответа...</div>
+
+    <script>
+        const btn = document.getElementById('micBtn');
+        const status = document.getElementById('status');
+        const resultDiv = document.getElementById('result');
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+            const rec = new SpeechRecognition();
+            rec.lang = 'ru-RU';
+
+            btn.onclick = () => { rec.start(); status.innerText = 'Слушаю...'; };
+
+            rec.onresult = (e) => {
+                const text = e.results[0][0].transcript;
+                status.innerText = 'Обработка: ' + text;
+                
+                fetch('/ask?q=' + encodeURIComponent(text))
+                    .then(r => r.text())
+                    .then(data => {
+                        status.innerText = 'Отправлено на ESP32!';
+                        resultDiv.innerText = 'ИИ ответил: ' + data;
+                    })
+                    .catch(err => {
+                        status.innerText = 'Ошибка запроса';
+                        resultDiv.innerText = err;
+                    });
+            };
+        } else {
+            status.innerText = 'Браузер не поддерживает голос';
+        }
+    </script>
 </body>
 </html>
 """
-
 
 @app.route('/')
 def index():
     return render_template_string(HTML_PAGE)
 
-
 @app.route('/ask')
 def ask():
-    user_query = request.args.get('q')
+    global last_answer
+    query = request.args.get('q', '')
+    if not query:
+        return "Пустой запрос"
     
-    if not user_query:
-        return "Ошибка: пустой запрос", 400
-
-    payload = {
-        "contents": [{
-            "parts": [{"text": user_query}]
-        }]
-    }
-    
-    headers = {'Content-Type': 'application/json'}
-
     try:
-        response = requests.post(GEMINI_URL, json=payload, headers=headers, timeout=15)
-        
-        if response.status_code == 200:
-            result = response.json()
-            ai_response = result['candidates'][0]['content']['parts'][0]['text']
-            return ai_response
-        
-        elif response.status_code == 429:
-            return "⚠️ Лимит запросов исчерпан. Бесплатный тариф: 2 запроса в минуту. Подождите 30-60 секунд.", 429
-        
-        else:
-            error_msg = "Неизвестная ошибка"
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('error', {}).get('message', error_msg)
-            except:
-                pass
-            return f"Ошибка API: {error_msg}", response.status_code
-
-    except requests.exceptions.Timeout:
-        return "Ошибка: сервер Google не ответил вовремя", 504
-    except requests.exceptions.ConnectionError:
-        return "Ошибка: нет соединения с API Gemini", 502
+        response = model.generate_content(
+            query + ". Ответь одной короткой фразой, не больше 60 символов."
+        )
+        last_answer = response.text.strip()
+        return last_answer
     except Exception as e:
-        return f"Ошибка сервера: {str(e)}", 500
+        last_answer = "Ошибка ИИ"
+        return f"Ошибка ИИ: {str(e)}"
 
+@app.route('/get_answer')
+def get_answer():
+    return last_answer
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
