@@ -8,7 +8,8 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 # URL для модели 1.5 Flash (самая быстрая и актуальная)
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# Замени строку 11 на эту:
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 # Простой HTML-интерфейс для проверки работы
 HTML_PAGE = """
