@@ -4,7 +4,7 @@ from google import genai
 
 app = Flask(__name__)
 
-# Используем новый клиент из библиотеки google-genai
+# Инициализация клиента через новую библиотеку
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 HTML_PAGE = """
@@ -22,13 +22,15 @@ HTML_PAGE = """
 <body>
     <h1>Голосовой помощник</h1>
     <form action="/ask">
-        <input type="text" name="q" placeholder="Введите вопрос..." style="padding: 10px; border-radius: 5px;">
+        <input type="text" name="q" placeholder="Ваш вопрос..." style="padding: 10px; border-radius: 5px;">
         <button type="submit" class="btn">🎤 Спросить</button>
     </form>
     <br>
     {% if response %}
-        <p style="color: #00ff00;">Ответ получен!</p>
-        <div style="padding: 20px; border: 1px solid #333; display: inline-block;">{{ response }}</div>
+        <div style="margin-top: 20px; padding: 20px; border: 1px solid #333; display: inline-block;">
+            <p style="color: #00ff00;">Ответ от ИИ:</p>
+            <p>{{ response }}</p>
+        </div>
     {% endif %}
 </body>
 </html>
@@ -42,7 +44,7 @@ def index():
 def ask():
     user_query = request.args.get('q', 'Привет')
     try:
-        # Новый способ вызова модели gemini-1.5-flash
+        # Прямой вызов модели 1.5 Flash через новый клиент
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=user_query
@@ -50,3 +52,6 @@ def ask():
         return render_template_string(HTML_PAGE, response=response.text)
     except Exception as e:
         return render_template_string(HTML_PAGE, response=f"Ошибка: {str(e)}")
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
