@@ -4,10 +4,14 @@ from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Берем ключ из Environment Variables в Render (заканчивается на ...NOOw)
+# Берём ключ из Environment Variables в Render
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
-# Ссылка для модели 1.5 Flash через v1beta
+# Проверка наличия ключа при запуске
+if not API_KEY:
+    raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
+
+# Ссылка для модели Gemini 1.5 Flash через v1beta
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
@@ -40,15 +44,25 @@ HTML_PAGE = """
 </html>
 """
 
+
 @app.route('/')
 def index():
+    """Главная страница с формой"""
     return render_template_string(HTML_PAGE)
+
 
 @app.route('/ask')
 def ask():
+    """Обработка вопроса и получение ответа от Gemini"""
     user_query = request.args.get('q')
+    
+    # Проверка на пустой запрос
     if not user_query:
-        return "Ошибка: пустой запрос"
+        return "Ошибка: пустой запрос", 400
+
+    # Проверка длины запроса (опционально)
+    if len(user_query) > 500:
+        return "Ошибка: слишком длинный запрос (макс. 500 символов)", 400
 
     payload = {
         "contents": [{
@@ -59,22 +73,47 @@ def ask():
     headers = {'Content-Type': 'application/json'}
 
     try:
-        # Отправляем POST запрос к Google AI
-        response = requests.post(GEMINI_URL, json=payload, headers=headers, timeout=10)
-        result = response.json()
-
+        # Отправляем POST запрос к Google AI API
+        response = requests.post(
+            GEMINI_URL, 
+            json=payload, 
+            headers=headers, 
+            timeout=15  # Увеличил таймаут для надёжности
+        )
+        
+        # Проверяем статус ответа
         if response.status_code == 200:
-            # Чистый текст ответа для ESP32
-            ai_response = result['candidates'][0]['content']['parts'][0]['text']
-            return ai_response
+            result = response.json()
+            
+            # Извлекаем текст ответа
+            try:
+                ai_response = result['candidates'][0]['content']['parts'][0]['text']
+                return ai_response
+            except (KeyError, IndexError) as e:
+                return f"Ошибка: неожиданный формат ответа от API", 500
         else:
-            # Вывод ошибки от Google (например, если модель не найдена)
-            error_msg = result.get('error', {}).get('message', 'Неизвестная ошибка')
-            return f"Ошибка API: {error_msg}"
+            # Обработка ошибок API
+            error_msg = "Неизвестная ошибка API"
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', {}).get('message', 'Неизвестная ошибка')
+            except:
+                error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            
+            return f"Ошибка API: {error_msg}", response.status_code
 
+    except requests.exceptions.Timeout:
+        return "Ошибка: превышено время ожидания ответа от API", 504
+    except requests.exceptions.ConnectionError:
+        return "Ошибка: не удалось подключиться к API Gemini", 502
     except Exception as e:
-        return f"Ошибка сервера: {str(e)}"
+        # Логируем ошибку для отладки (будет видно в логах Render)
+        print(f"Неожиданная ошибка: {str(e)}")
+        return f"Ошибка сервера: {str(e)}", 500
 
+
+# Для локальной разработки
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 5000))
+    # Только для разработки! На Render используется gunicorn
+    app.run(host='0.0.0.0', port=port, debug=False)
