@@ -11,8 +11,8 @@ API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
 
-# Ссылка для модели Gemini 1.5 Flash через v1beta
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# Актуальная модель Gemini 2.0 Flash (стабильная версия)
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -60,10 +60,6 @@ def ask():
     if not user_query:
         return "Ошибка: пустой запрос", 400
 
-    # Проверка длины запроса (опционально)
-    if len(user_query) > 500:
-        return "Ошибка: слишком длинный запрос (макс. 500 символов)", 400
-
     payload = {
         "contents": [{
             "parts": [{"text": user_query}]
@@ -78,21 +74,19 @@ def ask():
             GEMINI_URL, 
             json=payload, 
             headers=headers, 
-            timeout=15  # Увеличил таймаут для надёжности
+            timeout=15
         )
         
         # Проверяем статус ответа
         if response.status_code == 200:
             result = response.json()
             
-            # Извлекаем текст ответа
             try:
                 ai_response = result['candidates'][0]['content']['parts'][0]['text']
                 return ai_response
             except (KeyError, IndexError) as e:
                 return f"Ошибка: неожиданный формат ответа от API", 500
         else:
-            # Обработка ошибок API
             error_msg = "Неизвестная ошибка API"
             try:
                 error_data = response.json()
@@ -107,7 +101,6 @@ def ask():
     except requests.exceptions.ConnectionError:
         return "Ошибка: не удалось подключиться к API Gemini", 502
     except Exception as e:
-        # Логируем ошибку для отладки (будет видно в логах Render)
         print(f"Неожиданная ошибка: {str(e)}")
         return f"Ошибка сервера: {str(e)}", 500
 
@@ -115,5 +108,4 @@ def ask():
 # Для локальной разработки
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    # Только для разработки! На Render используется gunicorn
     app.run(host='0.0.0.0', port=port, debug=False)
