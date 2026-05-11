@@ -10,7 +10,7 @@ if not API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
 
 # Используем gemini-2.5-flash
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={API_KEY}"
+model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
 
 HTML_PAGE = """
 <!DOCTYPE html>
