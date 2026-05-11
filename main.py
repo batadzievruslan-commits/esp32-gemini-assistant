@@ -78,9 +78,9 @@ def ask():
         return "Пустой запрос"
     
     try:
-        response = model.generate_content(
-            query + ". Ответь одной короткой фразой, не больше 60 символов."
-        )
+      response = model.generate_content(
+    query + ". Ответь строго до 50 символов одной фразой."
+)
         last_answer = response.text.strip()
         return last_answer
     except Exception as e:
