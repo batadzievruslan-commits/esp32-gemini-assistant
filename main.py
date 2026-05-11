@@ -45,7 +45,7 @@ HTML_PAGE = """
             rec.onresult = (e) => {
                 const text = e.results[0][0].transcript;
                 status.innerText = 'Обработка: ' + text;
-                
+
                 fetch('/ask?q=' + encodeURIComponent(text))
                     .then(r => r.text())
                     .then(data => {
@@ -75,7 +75,7 @@ def ask():
     query = request.args.get('q', '')
     if not query:
         return "Пустой запрос"
-    
+
     try:
         response = model.generate_content(
             query + ". Ответь одной короткой фразой, не больше 60 символов."
