@@ -47,27 +47,22 @@ def index():
 def ask():
     user_query = request.args.get('q')
     if not user_query:
-        return render_template_string(HTML_PAGE, response="Введите вопрос!")
+        return "Введите вопрос!"
     
-    # Формируем структуру запроса вручную
-    payload = {
-        "contents": [{"parts": [{"text": user_query}]}]
-    }
+    payload = {"contents": [{"parts": [{"text": user_query}]}]}
     
     try:
         res = requests.post(GEMINI_URL, json=payload)
         data = res.json()
         
         if res.status_code == 200:
-            # Парсим ответ от Google
             ai_text = data['candidates'][0]['content']['parts'][0]['text']
-            return render_template_string(HTML_PAGE, response=ai_text)
+            # Временно выводим ТОЛЬКО текст ответа, чтобы убедиться, что он пришел
+            return f"<h1>Ответ ИИ:</h1><p style='color:green; font-size:20px;'>{ai_text}</p><a href='/'>Назад</a>"
         else:
-            error_msg = data.get('error', {}).get('message', 'Ошибка API')
-            return render_template_string(HTML_PAGE, response=f"Ошибка: {error_msg}")
+            return f"Ошибка API: {data}"
     except Exception as e:
-        return render_template_string(HTML_PAGE, response=f"Ошибка сервера: {str(e)}")
-
+        return f"Ошибка сервера: {str(e)}"
 if __name__ == "__main__":
     # Render передает порт через переменную окружения
     port = int(os.environ.get("PORT", 5000))
