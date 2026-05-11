@@ -1,15 +1,11 @@
 import os
-from flask import Flask, request
-import google.generativeai as genai
+from flask import Flask, request, render_template_string
+from google import genai
 
 app = Flask(__name__)
 
-# Настройка API
-API_KEY = os.environ.get("GOOGLE_API_KEY")
-genai.configure(api_key=API_KEY)
-
-# Мы используем это имя модели, так как оно самое универсальное для v1 API
-model = genai.GenerativeModel('gemini-1.0-pro')
+# Используем новый клиент из библиотеки google-genai
+client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -26,17 +22,14 @@ HTML_PAGE = """
 <body>
     <h1>Голосовой помощник</h1>
     <form action="/ask">
-        <input type="hidden" name="q" value="Привет, как дела?">
-        <button type="submit" class="btn">🎤 Задать вопрос</button>
+        <input type="text" name="q" placeholder="Введите вопрос..." style="padding: 10px; border-radius: 5px;">
+        <button type="submit" class="btn">🎤 Спросить</button>
     </form>
     <br>
-    <div id="result">
-        {% if response %}
-            <p style="color: #00ff00;">Отправлено на ESP32!</p>
-            <hr>
-            <p>ИИ ответил: {{ response }}</p>
-        {% endif %}
-    </div>
+    {% if response %}
+        <p style="color: #00ff00;">Ответ получен!</p>
+        <div style="padding: 20px; border: 1px solid #333; display: inline-block;">{{ response }}</div>
+    {% endif %}
 </body>
 </html>
 """
@@ -49,10 +42,11 @@ def index():
 def ask():
     user_query = request.args.get('q', 'Привет')
     try:
-        # Прямой вызов генерации
-        response = model.generate_content(user_query)
+        # Новый способ вызова модели gemini-1.5-flash
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=user_query
+        )
         return render_template_string(HTML_PAGE, response=response.text)
     except Exception as e:
         return render_template_string(HTML_PAGE, response=f"Ошибка: {str(e)}")
-
-from flask import render_template_string
