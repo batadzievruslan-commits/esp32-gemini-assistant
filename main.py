@@ -7,7 +7,7 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-
+# Вернулись на lite — она стабильнее
 model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
 
 last_answer = "Привет! Я готов к работе."
