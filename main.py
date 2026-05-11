@@ -1,18 +1,16 @@
 import os
+import re
 import requests
 import time
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Берём ключ из Environment Variables в Render
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
-# Проверка наличия ключа при запуске
 if not API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
 
-# Актуальная модель Gemini
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
@@ -48,16 +46,13 @@ HTML_PAGE = """
 
 @app.route('/')
 def index():
-    """Главная страница с формой"""
     return render_template_string(HTML_PAGE)
 
 
 @app.route('/ask')
 def ask():
-    """Обработка вопроса и получение ответа от Gemini с повторными попытками"""
     user_query = request.args.get('q')
     
-    # Проверка на пустой запрос
     if not user_query:
         return "Ошибка: пустой запрос", 400
 
@@ -69,34 +64,46 @@ def ask():
     
     headers = {'Content-Type': 'application/json'}
 
-    # Пробуем до 3 раз с задержкой
-    max_retries = 3
+    max_retries = 5  # Увеличил до 5 попыток
+    
     for attempt in range(max_retries):
         try:
-            # Отправляем POST запрос к Google AI API
             response = requests.post(
                 GEMINI_URL, 
                 json=payload, 
                 headers=headers, 
-                timeout=15
+                timeout=30  # Увеличил таймаут
             )
             
-            # Если успешно — возвращаем ответ
+            # Успешный ответ
             if response.status_code == 200:
                 result = response.json()
                 try:
                     ai_response = result['candidates'][0]['content']['parts'][0]['text']
                     return ai_response
-                except (KeyError, IndexError) as e:
-                    return f"Ошибка: неожиданный формат ответа от API", 500
+                except (KeyError, IndexError):
+                    return "Ошибка: неожиданный формат ответа от API", 500
             
-            # Если превышен лимит — ждём и пробуем снова
+            # Превышен лимит — ждём и пробуем снова
             elif response.status_code == 429:
                 if attempt < max_retries - 1:
-                    time.sleep(7)  # Ждём 7 секунд (чуть больше, чем просит Google)
+                    # Пробуем извлечь время ожидания из ответа Google
+                    wait_time = 8  # По умолчанию 8 секунд
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('error', {}).get('message', '')
+                        # Ищем "retry in X.Xs"
+                        match = re.search(r'retry in (\d+\.?\d*)s', error_msg)
+                        if match:
+                            wait_time = float(match.group(1)) + 1  # +1 секунда для надёжности
+                    except:
+                        pass
+                    
+                    print(f"Лимит превышен, жду {wait_time:.1f} сек... (попытка {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
                     continue
                 else:
-                    return "Превышен лимит запросов. Пожалуйста, подождите минуту и попробуйте снова.", 429
+                    return "Превышен лимит запросов. Подождите 1-2 минуты и попробуйте снова.", 429
             
             # Другие ошибки API
             else:
@@ -105,25 +112,24 @@ def ask():
                     error_data = response.json()
                     error_msg = error_data.get('error', {}).get('message', 'Неизвестная ошибка')
                 except:
-                    error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                    error_msg = f"HTTP {response.status_code}"
                 
                 return f"Ошибка API: {error_msg}", response.status_code
 
         except requests.exceptions.Timeout:
             if attempt < max_retries - 1:
-                time.sleep(2)
+                time.sleep(3)
                 continue
-            return "Ошибка: превышено время ожидания ответа от API", 504
+            return "Ошибка: сервер Google не отвечает (таймаут)", 504
         except requests.exceptions.ConnectionError:
             return "Ошибка: не удалось подключиться к API Gemini", 502
         except Exception as e:
             print(f"Неожиданная ошибка: {str(e)}")
             return f"Ошибка сервера: {str(e)}", 500
     
-    return "Не удалось получить ответ после нескольких попыток", 500
+    return "Не удалось получить ответ после всех попыток", 500
 
 
-# Для локальной разработки
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
