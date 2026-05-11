@@ -1,7 +1,5 @@
 import os
-import re
 import requests
-import time
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
@@ -64,70 +62,32 @@ def ask():
     
     headers = {'Content-Type': 'application/json'}
 
-    max_retries = 5  # Увеличил до 5 попыток
-    
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(
-                GEMINI_URL, 
-                json=payload, 
-                headers=headers, 
-                timeout=30  # Увеличил таймаут
-            )
-            
-            # Успешный ответ
-            if response.status_code == 200:
-                result = response.json()
-                try:
-                    ai_response = result['candidates'][0]['content']['parts'][0]['text']
-                    return ai_response
-                except (KeyError, IndexError):
-                    return "Ошибка: неожиданный формат ответа от API", 500
-            
-            # Превышен лимит — ждём и пробуем снова
-            elif response.status_code == 429:
-                if attempt < max_retries - 1:
-                    # Пробуем извлечь время ожидания из ответа Google
-                    wait_time = 8  # По умолчанию 8 секунд
-                    try:
-                        error_data = response.json()
-                        error_msg = error_data.get('error', {}).get('message', '')
-                        # Ищем "retry in X.Xs"
-                        match = re.search(r'retry in (\d+\.?\d*)s', error_msg)
-                        if match:
-                            wait_time = float(match.group(1)) + 1  # +1 секунда для надёжности
-                    except:
-                        pass
-                    
-                    print(f"Лимит превышен, жду {wait_time:.1f} сек... (попытка {attempt + 1}/{max_retries})")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    return "Превышен лимит запросов. Подождите 1-2 минуты и попробуйте снова.", 429
-            
-            # Другие ошибки API
-            else:
-                error_msg = "Неизвестная ошибка API"
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('error', {}).get('message', 'Неизвестная ошибка')
-                except:
-                    error_msg = f"HTTP {response.status_code}"
-                
-                return f"Ошибка API: {error_msg}", response.status_code
+    try:
+        response = requests.post(GEMINI_URL, json=payload, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            result = response.json()
+            ai_response = result['candidates'][0]['content']['parts'][0]['text']
+            return ai_response
+        
+        elif response.status_code == 429:
+            return "⚠️ Лимит запросов исчерпан. Бесплатный тариф: 2 запроса в минуту. Подождите 30-60 секунд.", 429
+        
+        else:
+            error_msg = "Неизвестная ошибка"
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', {}).get('message', error_msg)
+            except:
+                pass
+            return f"Ошибка API: {error_msg}", response.status_code
 
-        except requests.exceptions.Timeout:
-            if attempt < max_retries - 1:
-                time.sleep(3)
-                continue
-            return "Ошибка: сервер Google не отвечает (таймаут)", 504
-        except requests.exceptions.ConnectionError:
-            return "Ошибка: не удалось подключиться к API Gemini", 502
-        except Exception as e:
-            print(f"Неожиданная ошибка: {str(e)}")
-            return f"Ошибка сервера: {str(e)}", 500
-    
-    return "Не удалось получить ответ после всех попыток", 500
+    except requests.exceptions.Timeout:
+        return "Ошибка: сервер Google не ответил вовремя", 504
+    except requests.exceptions.ConnectionError:
+        return "Ошибка: нет соединения с API Gemini", 502
+    except Exception as e:
+        return f"Ошибка сервера: {str(e)}", 500
 
 
 if __name__ == "__main__":
