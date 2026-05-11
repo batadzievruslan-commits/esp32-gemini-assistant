@@ -7,8 +7,9 @@ app = Flask(__name__)
 # Берем ключ из настроек Render (Environment Variables)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
-# Используем версию v1beta и модель gemini-1.5-flash как самую стабильную
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# Было: gemini-1.5-flash
+# Стало: gemini-pro (самая совместимая версия для старых и новых проектов)
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
 <!DOCTYPE html>
