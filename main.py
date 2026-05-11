@@ -7,7 +7,6 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# Вернулись на lite — она стабильнее
 model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
 
 last_answer = "Привет! Я готов к работе."
@@ -78,9 +77,9 @@ def ask():
         return "Пустой запрос"
     
     try:
-      response = model.generate_content(
-    query + ". Ответь строго до 50 символов одной фразой."
-)
+        response = model.generate_content(
+            query + ". Ответь одной короткой фразой, не больше 60 символов."
+        )
         last_answer = response.text.strip()
         return last_answer
     except Exception as e:
