@@ -46,7 +46,7 @@ def ask():
     try:
         # Прямой вызов модели 1.5 Flash через новый клиент
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model = genai.GenerativeModel('gemini-pro'),
             contents=user_query
         )
         return render_template_string(HTML_PAGE, response=response.text)
