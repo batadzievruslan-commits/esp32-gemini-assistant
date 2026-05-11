@@ -7,8 +7,8 @@ app = Flask(__name__)
 # Берем ключ из настроек Render
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
-# Прямая ссылка на API v1 (самая стабильная точка входа)
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={API_KEY}"
+# Мы добавляем префикс models/, который обязателен для прямых вызовов v1
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
 <!DOCTYPE html>
