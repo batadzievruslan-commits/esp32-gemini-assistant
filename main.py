@@ -1,69 +1,42 @@
 import os
-from flask import Flask, request, render_template_string
+from flask import Flask, request
 import google.generativeai as genai
 
 app = Flask(__name__)
 
-# Настройка API ключа из переменных окружения Render
+# Настройка API
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# Используем проверенную модель gemini-pro
-model = genai.GenerativeModel('gemini-pro')
-
-# Переменная для хранения ответа для ESP32
-last_answer = "Привет! Я готов к работе."
+# Мы используем это имя модели, так как оно самое универсальное для v1 API
+model = genai.GenerativeModel('gemini-1.0-pro')
 
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>Gemini Assistant</title>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: white; }
-        button { padding: 20px 40px; font-size: 20px; border-radius: 50px; border: none; background: #007bff; color: white; cursor: pointer; margin-bottom: 20px; }
-        #status { color: #00ff00; margin-top: 10px; min-height: 20px; }
-        #result { margin-top: 20px; color: #ccc; border-top: 1px solid #333; padding-top: 20px; }
+        body { background: #121212; color: white; font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .btn { background: #007bff; border: none; color: white; padding: 15px 32px; border-radius: 30px; font-size: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
     <h1>Голосовой помощник</h1>
-    <button id="micBtn">🎤 Задать вопрос</button>
-    <div id="status">Нажмите кнопку и говорите</div>
-    <div id="result">Ожидание ответа...</div>
-
-    <script>
-        const btn = document.getElementById('micBtn');
-        const status = document.getElementById('status');
-        const resultDiv = document.getElementById('result');
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        if (SpeechRecognition) {
-            const rec = new SpeechRecognition();
-            rec.lang = 'ru-RU';
-
-            btn.onclick = () => { rec.start(); status.innerText = 'Слушаю...'; };
-
-            rec.onresult = (e) => {
-                const text = e.results[0][0].transcript;
-                status.innerText = 'Обработка: ' + text;
-                
-                fetch('/ask?q=' + encodeURIComponent(text))
-                    .then(r => r.text())
-                    .then(data => {
-                        status.innerText = 'Отправлено на ESP32!';
-                        resultDiv.innerText = 'ИИ ответил: ' + data;
-                    })
-                    .catch(err => {
-                        status.innerText = 'Ошибка запроса';
-                        resultDiv.innerText = err;
-                    });
-            };
-        } else {
-            status.innerText = 'Браузер не поддерживает голос';
-        }
-    </script>
+    <form action="/ask">
+        <input type="hidden" name="q" value="Привет, как дела?">
+        <button type="submit" class="btn">🎤 Задать вопрос</button>
+    </form>
+    <br>
+    <div id="result">
+        {% if response %}
+            <p style="color: #00ff00;">Отправлено на ESP32!</p>
+            <hr>
+            <p>ИИ ответил: {{ response }}</p>
+        {% endif %}
+    </div>
 </body>
 </html>
 """
@@ -74,24 +47,12 @@ def index():
 
 @app.route('/ask')
 def ask():
-    global last_answer
-    query = request.args.get('q', '')
-    if not query:
-        return "Пустой запрос"
-    
+    user_query = request.args.get('q', 'Привет')
     try:
-        # Промпт для короткого ответа (важно для OLED)
-        response = model.generate_content(query + ". Ответь очень коротко, максимум 10 слов.")
-        last_answer = response.text
-        return last_answer
+        # Прямой вызов генерации
+        response = model.generate_content(user_query)
+        return render_template_string(HTML_PAGE, response=response.text)
     except Exception as e:
-        last_answer = "Ошибка ИИ"
-        return f"Ошибка: {str(e)}"
+        return render_template_string(HTML_PAGE, response=f"Ошибка: {str(e)}")
 
-@app.route('/get_answer')
-def get_answer():
-    return last_answer
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+from flask import render_template_string
