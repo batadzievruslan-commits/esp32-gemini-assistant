@@ -22,7 +22,7 @@ def ask():
     try:
         # Самый современный способ вызова Gemini
         response = client.models.generate_content(
-            model='gemini-1.5-flash', 
+           model = genai.GenerativeModel('gemini-pro'), 
             contents=query + ". Ответь очень коротко, до 10 слов."
         )
         last_answer = response.text
