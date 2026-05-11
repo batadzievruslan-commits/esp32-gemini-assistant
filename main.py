@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
@@ -11,7 +12,7 @@ API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not API_KEY:
     raise RuntimeError("GOOGLE_API_KEY не найден в переменных окружения!")
 
-# Актуальная модель Gemini 2.0 Flash (стабильная версия)
+# Актуальная модель Gemini
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={API_KEY}"
 
 HTML_PAGE = """
@@ -53,7 +54,7 @@ def index():
 
 @app.route('/ask')
 def ask():
-    """Обработка вопроса и получение ответа от Gemini"""
+    """Обработка вопроса и получение ответа от Gemini с повторными попытками"""
     user_query = request.args.get('q')
     
     # Проверка на пустой запрос
@@ -68,41 +69,58 @@ def ask():
     
     headers = {'Content-Type': 'application/json'}
 
-    try:
-        # Отправляем POST запрос к Google AI API
-        response = requests.post(
-            GEMINI_URL, 
-            json=payload, 
-            headers=headers, 
-            timeout=15
-        )
-        
-        # Проверяем статус ответа
-        if response.status_code == 200:
-            result = response.json()
+    # Пробуем до 3 раз с задержкой
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Отправляем POST запрос к Google AI API
+            response = requests.post(
+                GEMINI_URL, 
+                json=payload, 
+                headers=headers, 
+                timeout=15
+            )
             
-            try:
-                ai_response = result['candidates'][0]['content']['parts'][0]['text']
-                return ai_response
-            except (KeyError, IndexError) as e:
-                return f"Ошибка: неожиданный формат ответа от API", 500
-        else:
-            error_msg = "Неизвестная ошибка API"
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('error', {}).get('message', 'Неизвестная ошибка')
-            except:
-                error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            # Если успешно — возвращаем ответ
+            if response.status_code == 200:
+                result = response.json()
+                try:
+                    ai_response = result['candidates'][0]['content']['parts'][0]['text']
+                    return ai_response
+                except (KeyError, IndexError) as e:
+                    return f"Ошибка: неожиданный формат ответа от API", 500
             
-            return f"Ошибка API: {error_msg}", response.status_code
+            # Если превышен лимит — ждём и пробуем снова
+            elif response.status_code == 429:
+                if attempt < max_retries - 1:
+                    time.sleep(7)  # Ждём 7 секунд (чуть больше, чем просит Google)
+                    continue
+                else:
+                    return "Превышен лимит запросов. Пожалуйста, подождите минуту и попробуйте снова.", 429
+            
+            # Другие ошибки API
+            else:
+                error_msg = "Неизвестная ошибка API"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('error', {}).get('message', 'Неизвестная ошибка')
+                except:
+                    error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                
+                return f"Ошибка API: {error_msg}", response.status_code
 
-    except requests.exceptions.Timeout:
-        return "Ошибка: превышено время ожидания ответа от API", 504
-    except requests.exceptions.ConnectionError:
-        return "Ошибка: не удалось подключиться к API Gemini", 502
-    except Exception as e:
-        print(f"Неожиданная ошибка: {str(e)}")
-        return f"Ошибка сервера: {str(e)}", 500
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            return "Ошибка: превышено время ожидания ответа от API", 504
+        except requests.exceptions.ConnectionError:
+            return "Ошибка: не удалось подключиться к API Gemini", 502
+        except Exception as e:
+            print(f"Неожиданная ошибка: {str(e)}")
+            return f"Ошибка сервера: {str(e)}", 500
+    
+    return "Не удалось получить ответ после нескольких попыток", 500
 
 
 # Для локальной разработки
