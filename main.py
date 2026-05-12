@@ -19,46 +19,94 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: white; }
-        button { padding: 20px 40px; font-size: 20px; border-radius: 50px; border: none; background: #007bff; color: white; cursor: pointer; margin-bottom: 20px; }
+        button { padding: 15px 30px; font-size: 18px; border-radius: 50px; border: none; color: white; cursor: pointer; margin: 5px; }
+        #micBtn { background: #dc3545; }
+        #sendBtn { background: #007bff; }
+        input { padding: 15px; font-size: 16px; width: 80%; max-width: 400px; border-radius: 10px; border: none; margin: 10px 0; background: #2a2a2a; color: white; }
         #status { color: #00ff00; margin-top: 10px; min-height: 20px; }
-        #result { margin-top: 20px; color: #ccc; border-top: 1px solid #333; padding-top: 20px; }
+        #result { margin-top: 20px; color: #ccc; border-top: 1px solid #333; padding-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; }
     </style>
 </head>
 <body>
     <h1>Голосовой помощник</h1>
-    <button id="micBtn">🎤 Задать вопрос</button>
-    <div id="status">Нажмите кнопку и говорите</div>
+    
+    <input type="text" id="textInput" placeholder="Введите вопрос..." />
+    <br>
+    <button id="sendBtn">📝 Отправить текст</button>
+    <button id="micBtn">🎤 Голосовой ввод</button>
+    
+    <div id="status">Нажмите кнопку и говорите, или введите текст</div>
     <div id="result">Ожидание ответа...</div>
 
     <script>
-        const btn = document.getElementById('micBtn');
+        const textInput = document.getElementById('textInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const micBtn = document.getElementById('micBtn');
         const status = document.getElementById('status');
         const resultDiv = document.getElementById('result');
+        
+        // ========== ОТПРАВКА ТЕКСТА ==========
+        function askGemini(query) {
+            status.innerText = 'Думаю...';
+            resultDiv.innerText = 'Загрузка...';
+            
+            fetch('/ask?q=' + encodeURIComponent(query))
+                .then(r => r.text())
+                .then(data => {
+                    status.innerText = 'Готово!';
+                    resultDiv.innerText = 'Ответ: ' + data;
+                })
+                .catch(err => {
+                    status.innerText = 'Ошибка запроса';
+                    resultDiv.innerText = err;
+                });
+        }
+        
+        // Кнопка "Отправить текст"
+        sendBtn.onclick = () => {
+            const text = textInput.value.trim();
+            if (text) {
+                askGemini(text);
+                textInput.value = '';
+            }
+        };
+        
+        // Отправка по Enter
+        textInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const text = textInput.value.trim();
+                if (text) {
+                    askGemini(text);
+                    textInput.value = '';
+                }
+            }
+        };
+        
+        // ========== ГОЛОСОВОЙ ВВОД ==========
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (SpeechRecognition) {
             const rec = new SpeechRecognition();
             rec.lang = 'ru-RU';
 
-            btn.onclick = () => { rec.start(); status.innerText = 'Слушаю...'; };
+            micBtn.onclick = () => { 
+                rec.start(); 
+                status.innerText = 'Слушаю...'; 
+            };
 
             rec.onresult = (e) => {
                 const text = e.results[0][0].transcript;
-                status.innerText = 'Обработка: ' + text;
-
-                fetch('/ask?q=' + encodeURIComponent(text))
-                    .then(r => r.text())
-                    .then(data => {
-                        status.innerText = 'Отправлено на ESP32!';
-                        resultDiv.innerText = 'ИИ ответил: ' + data;
-                    })
-                    .catch(err => {
-                        status.innerText = 'Ошибка запроса';
-                        resultDiv.innerText = err;
-                    });
+                textInput.value = text;
+                status.innerText = 'Распознано: ' + text;
+                askGemini(text);
+            };
+            
+            rec.onerror = () => {
+                status.innerText = 'Ошибка микрофона. Введите текст вручную.';
             };
         } else {
-            status.innerText = 'Браузер не поддерживает голос';
+            micBtn.style.display = 'none';
+            status.innerText = 'Браузер не поддерживает голос. Используйте ввод текста.';
         }
     </script>
 </body>
@@ -75,7 +123,7 @@ def ask():
     query = request.args.get('q', '')
     if not query:
         return "Пустой запрос"
-
+    
     try:
         response = model.generate_content(
             query + ". Ответь одной короткой фразой, не больше 60 символов."
